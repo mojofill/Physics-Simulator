@@ -81,7 +81,7 @@ function setupListener() {
         switch (e.code) {
             case "ArrowUp":
             case "KeyW":
-                if (isGrounded()) {
+                if (isGrounded() && Math.abs(velocity.y) < 1) {
                     canJump = true;
                 }
                 break;
@@ -101,7 +101,7 @@ function setupListener() {
 
 function setupAmbiguousobjects() {
     // create a sample block to test collision
-    let box = new GameObject(playerPos[0], GROUND_HEIGHT - BALL_RADIUS, BALL_RADIUS * 5, BALL_RADIUS, "green");
+    let box = new GameObject(playerPos[0], GROUND_HEIGHT - BALL_RADIUS * 5, BALL_RADIUS * 5, BALL_RADIUS * 5, "green");
     world.add(box);
 }
 
@@ -143,11 +143,42 @@ function collisionDetect(GameObject, check = []) {
     return null;
 }
 
+function collisionDetectDirection(obj1, obj2) {
+    // gets direction of obj1 hitting obj2
+
+    obj1_bottom = obj1.y + obj1.length;
+    obj2_bottom = obj2.y + obj2.length;
+    obj1_right = player.x + player.width;
+    obj2_right = obj2.x + obj2.width;
+
+    b_collision = obj2_bottom - player.y;
+    t_collision = obj1_bottom - obj2.y;
+    l_collision = obj1_right - obj2.x;
+    r_collision = obj2_right - player.x;
+
+    if (t_collision < b_collision && t_collision < l_collision && t_collision < r_collision ) {
+        //Top collision
+        return "top"
+    }
+    if (b_collision < t_collision && b_collision < l_collision && b_collision < r_collision) {
+        //bottom collision
+        obj1.color = "red";
+        return "bottom"
+    }
+    if (l_collision < r_collision && l_collision < t_collision && l_collision < b_collision) {
+        //Left collision
+        return "left"
+    }
+    if (r_collision < l_collision && r_collision < t_collision && r_collision < b_collision ) {
+        //Right collision
+        return "right"
+    }
+}
 function drawPlayer() {
     let x = player.x;
     let y = player.y;
 
-    ctx.fillStyle = 'white';
+    ctx.fillStyle = player.color;
     ctx.fillRect(x, y, BALL_RADIUS, BALL_RADIUS);
 }
 
@@ -174,15 +205,24 @@ function loop() {
     velocity.y *= drag;
     velocity.x *= drag;
 
-    let collidedObject = collisionDetect(player);
+    let border = 0.1;
+    let playerCollider = new GameObject(player.x - border, player.y - border, player.width + 2 * border, player.length + 2 * border);
+    let collidedObject = collisionDetect(playerCollider, [player]);
 
     if (collidedObject !== null) { // player has collided with something
         if (!canJump) {
-            velocity.y = -velocity.y;
-            if (Math.abs(velocity.y) < 1) {
-                velocity.y = 0;
+            let d = collisionDetectDirection(player, collidedObject);
+            if (d == "top" || d == "bottom") {
+                // else velocity.y *= -1;
+                velocity.y *= -1;
             }
-            // velocity.x = -velocity.x;
+            
+            if (d == "left" || d == "right") {
+                // if (Math.abs(velocity.x) < 1) {
+                //     velocity.x = 0;
+                // }
+                velocity.x *= -1
+            }
         }
     }
 
@@ -209,8 +249,15 @@ function applyFriction() {
     }
 }
 
+function applyPhysicsAllObjects() {
+    // apply physics to all objects in the world space
+    for (const obj of world.objects) {
+        
+    }
+}
+
 function isGrounded() {
-    let border = 0.1;
+    let border = 1;
     let playerCollider = new GameObject(player.x - border, player.y - border, player.width + 2 * border, player.length + 2 * border);
 
     return collisionDetect(playerCollider, [player]) !== null;
