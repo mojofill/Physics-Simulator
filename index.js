@@ -1,26 +1,20 @@
 /*
 TODO:
-    Collision detection
-    Add horizontal forces as well
+    Check collision direction and bounce back accordingly
+    Add mass and squishiness factor on objects to calculate better the amount of bounce to go back up
 */
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-
 const HEIGHT = document.body.clientHeight;
 const WIDTH = document.body.clientWidth;
-
 const FPS = 100;
-
 const GROUND_HEIGHT = (9 / 10) * HEIGHT;
-
 let pastTime = new Date().getTime() / 1000;
 let currTime = new Date().getTime() / 1000;
-
 const BALL_RADIUS = 30;
-
+let canJump = false;
 let playerPos = [500, 200]; // starting point
-
 let player;
 
 class Vector {
@@ -32,8 +26,8 @@ class Vector {
 let velocity = new Vector();
 
 let gravity = -9.28;
-let acceleration = 100;
-let jumpForce = 500;
+let acceleration = 300;
+let jumpForce = 10;
 let friction = 0.95;
 let drag = 0.99;
 
@@ -87,7 +81,9 @@ function setupListener() {
         switch (e.code) {
             case "ArrowUp":
             case "KeyW":
-                if (isGrounded()) velocity.y -= jumpForce * (currTime - pastTime);
+                if (isGrounded()) {
+                    canJump = true;
+                }
                 break;
             
             case "ArrowRight":
@@ -125,15 +121,21 @@ function clearScreen() {
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 }
 
-function collisionDetect(GameObject) {
+function collisionDetect(GameObject, check = []) {
     for (i = 0; i < world.objects.length; i++) {
         comparedGameObject = world.objects[i];
+        
+        condition = GameObject !== comparedGameObject &&
+        GameObject.x < comparedGameObject.x + comparedGameObject.width &&
+        GameObject.x + GameObject.width > comparedGameObject.x &&
+        GameObject.y < comparedGameObject.y + comparedGameObject.length &&
+        GameObject.length + GameObject.y > comparedGameObject.y;
 
-        if (GameObject !== comparedGameObject &&
-            GameObject.x < comparedGameObject.x + comparedGameObject.width &&
-            GameObject.x + GameObject.width > comparedGameObject.x &&
-            GameObject.y < comparedGameObject.y + comparedGameObject.length &&
-            GameObject.length + GameObject.y > comparedGameObject.y) {
+        for (const x of check) {
+            condition = condition && comparedGameObject !== x;
+        }
+
+        if (condition) {
             return comparedGameObject;
         }
     }
@@ -175,11 +177,23 @@ function loop() {
     let collidedObject = collisionDetect(player);
 
     if (collidedObject !== null) { // player has collided with something
-        velocity.y = -velocity.y;
-        velocity.x = -velocity.x;
+        if (!canJump) {
+            velocity.y = -velocity.y;
+            if (Math.abs(velocity.y) < 1) {
+                velocity.y = 0;
+            }
+            // velocity.x = -velocity.x;
+        }
     }
 
-    else velocity.y = velocity.y - gravity * (currTime - pastTime);
+    else {
+        velocity.y = velocity.y - gravity * (currTime - pastTime);
+    }
+
+    if (canJump) {
+        velocity.y -= jumpForce;
+        canJump = false;
+    }
     
     player.y += velocity.y;
     player.x += velocity.x;
@@ -196,7 +210,10 @@ function applyFriction() {
 }
 
 function isGrounded() {
-    return collisionDetect(player) !== null;
+    let border = 0.1;
+    let playerCollider = new GameObject(player.x - border, player.y - border, player.width + 2 * border, player.length + 2 * border);
+
+    return collisionDetect(playerCollider, [player]) !== null;
 }
 
 function updateTimePerFrame() {
