@@ -26,10 +26,19 @@ class Vector {
 let velocity = new Vector();
 
 let gravity = -9.28;
-let acceleration = 300;
+let acceleration = 400;
 let jumpForce = 10;
 let friction = 0.95;
 let drag = 0.99;
+
+// expressing desires
+let wantJump = false;
+let wantGoLeft = false;
+let wantGoRight = false;
+
+// random bullshit that might help make shit work
+let takeoffHappened = false;
+let isJumping = false;
 
 class World {
     objects = [];
@@ -47,13 +56,15 @@ class GameObject {
     width;
     length;
     color;
+    name;
 
-    constructor(x, y, w, l, color) {
+    constructor(x, y, w, l, color, name=null) {
         this.x = x;
         this.y = y;
         this.width = w;
         this.length = l;
         this.color = color;
+        this.name = name;
     }
 }
 
@@ -77,23 +88,25 @@ function setup() {
 }
 
 function setupListener() {
+    // instead of adding velocity in here, make a boolean (enum) and add velocity in the LOOP, not here
+
     document.addEventListener("keydown", (e) => {
         switch (e.code) {
             case "ArrowUp":
             case "KeyW":
-                if (isGrounded() && Math.abs(velocity.y) < 1) {
-                    canJump = true;
+                if (isGrounded() && canJump) {
+                    wantJump = true;
                 }
                 break;
             
             case "ArrowRight":
             case "KeyD":
-                velocity.x += acceleration * (currTime - pastTime);
+                wantGoRight = true;
                 break;
             
             case "ArrowLeft":
             case "KeyA":
-                velocity.x -= acceleration * (currTime - pastTime);
+                wantGoLeft = true;
                 break;
         }
     });
@@ -101,17 +114,17 @@ function setupListener() {
 
 function setupAmbiguousobjects() {
     // create a sample block to test collision
-    let box = new GameObject(playerPos[0], GROUND_HEIGHT - BALL_RADIUS * 5, BALL_RADIUS * 5, BALL_RADIUS * 5, "green");
+    let box = new GameObject(playerPos[0], GROUND_HEIGHT - BALL_RADIUS * 5, BALL_RADIUS * 5, BALL_RADIUS * 5, "purple", "box");
     world.add(box);
 }
 
 function setupGround() {
-    ground = new GameObject(0, GROUND_HEIGHT, WIDTH, HEIGHT - GROUND_HEIGHT, "cyan");
+    ground = new GameObject(0, GROUND_HEIGHT, WIDTH, HEIGHT - GROUND_HEIGHT, "green", "ground");
     world.add(ground);
 }
 
 function setupPlayer() {
-    player = new GameObject(playerPos[0], playerPos[1], BALL_RADIUS, BALL_RADIUS, "white");
+    player = new GameObject(playerPos[0], playerPos[1], BALL_RADIUS, BALL_RADIUS, "red", "player");
     world.add(player);
 }
 
@@ -121,26 +134,35 @@ function clearScreen() {
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 }
 
-function collisionDetect(GameObject, check = []) {
+function collisionDetect(obj, debug=false) {
+    let border = 0.1;
+    let collider = new GameObject(obj.x - border, obj.y - border, obj.width + 2 * border, obj.length + 2 * border);
+    // return more than one collision
+    collisions = [];
     for (i = 0; i < world.objects.length; i++) {
         comparedGameObject = world.objects[i];
-        
-        condition = GameObject !== comparedGameObject &&
-        GameObject.x < comparedGameObject.x + comparedGameObject.width &&
-        GameObject.x + GameObject.width > comparedGameObject.x &&
-        GameObject.y < comparedGameObject.y + comparedGameObject.length &&
-        GameObject.length + GameObject.y > comparedGameObject.y;
 
-        for (const x of check) {
-            condition = condition && comparedGameObject !== x;
-        }
-
-        if (condition) {
-            return comparedGameObject;
+        if (comparedGameObject !== obj &&
+            collider.x < comparedGameObject.x + comparedGameObject.width &&
+            collider.x + collider.width > comparedGameObject.x &&
+            collider.y < comparedGameObject.y + comparedGameObject.length &&
+            collider.length + collider.y > comparedGameObject.y) {
+            
+                collisions.push(comparedGameObject);
         }
     }
 
-    return null;
+    if(debug) {
+        // if (collisions.length === 0) {
+        //     console.log('player collided with nothing');
+        // }
+        // else {
+        //     console.log(`player collided with ${collisions.length} objects`)
+        // }
+        console.log(`player collided with ${collisions.length} objects`)
+    }
+
+    return collisions;
 }
 
 function collisionDetectDirection(obj1, obj2) {
@@ -156,23 +178,26 @@ function collisionDetectDirection(obj1, obj2) {
     l_collision = obj1_right - obj2.x;
     r_collision = obj2_right - player.x;
 
+    collisions = [];
+
     if (t_collision < b_collision && t_collision < l_collision && t_collision < r_collision ) {
         //Top collision
-        return "top"
+        collisions.push("top");
     }
     if (b_collision < t_collision && b_collision < l_collision && b_collision < r_collision) {
         //bottom collision
-        obj1.color = "red";
-        return "bottom"
+        collisions.push("bottom");
     }
     if (l_collision < r_collision && l_collision < t_collision && l_collision < b_collision) {
         //Left collision
-        return "left"
+        collisions.push("left");
     }
     if (r_collision < l_collision && r_collision < t_collision && r_collision < b_collision ) {
         //Right collision
-        return "right"
+        collisions.push("right");
     }
+
+    return collisions;
 }
 function drawPlayer() {
     let x = player.x;
@@ -205,38 +230,58 @@ function loop() {
     velocity.y *= drag;
     velocity.x *= drag;
 
-    let border = 0.1;
-    let playerCollider = new GameObject(player.x - border, player.y - border, player.width + 2 * border, player.length + 2 * border);
-    let collidedObject = collisionDetect(playerCollider, [player]);
+    let collidedObjects = collisionDetect(player);
 
-    if (collidedObject !== null) { // player has collided with something
-        if (!canJump) {
-            let d = collisionDetectDirection(player, collidedObject);
+    // will run for each collided object
+    for (const collidedObject of collidedObjects) {
+        let directions = collisionDetectDirection(player, collidedObject);
+
+        for (const d of directions) {
             if (d == "top" || d == "bottom") {
-                // else velocity.y *= -1;
-                velocity.y *= -1;
+                // if the player has not taken off from the ground yet (or they are not jumping), then you can bounce around the player
+                // however, if the player is jumping, then what happens is, because the player is
+                // still on the ground, therefore colling on top, the jump force then
+                // gets flipped, which causes it to go into the ground
+                
+                // if take off has not happened yet but the player is jumping, then do not flip velocity y
+                // else, flip velocity y
+                if (!(!takeoffHappened && isJumping)) {
+                    velocity.y *= -1;
+                }
+                
+                // when velocty.y gets between [-1, 1], set it to 0 just because why not
+                if (Math.abs(velocity.y) <= 1) {
+                    velocity.y = 0;
+                    canJump = true;
+                }
+
+                if (takeoffHappened && isJumping) { // if the take off has happened and the player was jumping, AND the player collided with an object on the top side, then that means everything goes back normal
+                    isJumping = false;
+                    takeoffHappened = false;
+                }
             }
             
             if (d == "left" || d == "right") {
-                // if (Math.abs(velocity.x) < 1) {
-                //     velocity.x = 0;
-                // }
-                velocity.x *= -1
+                velocity.x *= -1;
             }
         }
     }
 
-    else {
-        velocity.y = velocity.y - gravity * (currTime - pastTime);
+    // if take off has not happened yet AND the player is jumping
+    if(!takeoffHappened && isJumping) {
+        if (collidedObjects.length == 0) { // if player is not colliding with anything, set takeoffHappened to true
+            takeoffHappened = true;
+        }
     }
 
-    if (canJump) {
-        velocity.y -= jumpForce;
-        canJump = false;
+    if (collidedObjects.length == 0) {
+        velocity.y = velocity.y - gravity * (currTime - pastTime);
     }
     
     player.y += velocity.y;
     player.x += velocity.x;
+
+    carryOutDesires(); // this part is the one where all the code for player wanting to get left and right go
 
     updateTimePerFrame();
 
@@ -256,11 +301,34 @@ function applyPhysicsAllObjects() {
     }
 }
 
-function isGrounded() {
-    let border = 1;
-    let playerCollider = new GameObject(player.x - border, player.y - border, player.width + 2 * border, player.length + 2 * border);
+function carryOutDesires() {
+    if (wantJump) {
+        velocity.y -= jumpForce;
+        wantJump = false;
+        isJumping = true;
+    }
 
-    return collisionDetect(playerCollider, [player]) !== null;
+    if (wantGoLeft) {
+        velocity.x -= acceleration * (currTime - pastTime);
+        wantGoLeft = false;
+    }
+
+    if (wantGoRight) {
+        velocity.x += acceleration * (currTime - pastTime);
+        wantGoRight = false;
+    }
+}
+
+function isGrounded() {
+    let collidedObjects = collisionDetect(player);
+    for (const obj of collidedObjects) {
+        let directions = collisionDetectDirection(player, obj);
+        for (const d of directions) {
+            if (d === 'top') {
+                return true;
+            }
+        }
+    }
 }
 
 function updateTimePerFrame() {
