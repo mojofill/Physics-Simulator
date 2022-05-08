@@ -12,21 +12,27 @@ const FPS = 100;
 const GROUND_HEIGHT = (9 / 10) * HEIGHT;
 let pastTime = new Date().getTime() / 1000;
 let currTime = new Date().getTime() / 1000;
-const BALL_RADIUS = 30;
+const UNIT_WIDTH = 30;
 let canJump = false;
 let playerPos = [500, 200]; // starting point
 let player;
+let wind = 0.1;
+let windIncrement = 0.5;
+let windCap = 0.5;
 
 class Vector {
     x = 0;
     y = 0;
-    z = 0;
+    constructor(x = 0, y = 0) {
+        this.x = x;
+        this.y = y;
+    }
 }
 
 let velocity = new Vector();
 
-let gravity = -9.28;
-let acceleration = 400;
+let gravity = 9.28;
+let acceleration = 100;
 let jumpForce = 10;
 let friction = 0.95;
 let drag = 0.99;
@@ -57,14 +63,27 @@ class GameObject {
     length;
     color;
     name;
+    stationary;
+    velocity;
 
-    constructor(x, y, w, l, color, name=null) {
+    constructor(x, y, w, l, color, name=null, stationary=false) {
         this.x = x;
         this.y = y;
         this.width = w;
         this.length = l;
         this.color = color;
         this.name = name;
+        this.stationary = stationary;
+        this.velocity = new Vector(0, 0);
+    }
+
+    clear() {
+        ctx.clearRect(this.x, this.y, this.width, this.length);
+    }
+
+    draw() {
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, this.width, this.length);
     }
 }
 
@@ -81,10 +100,13 @@ function setup() {
     canvas.style.margin = 0;
     canvas.style.padding = 0;
 
+    const DEBUG = true;
+
     setupListener();
     setupGround();
+    setupWalls(DEBUG);
     setupPlayer();
-    setupAmbiguousobjects();
+    // setupObstacles();
 }
 
 function setupListener() {
@@ -108,24 +130,59 @@ function setupListener() {
             case "KeyA":
                 wantGoLeft = true;
                 break;
+            case "KeyP":
+                spawnNewPhysicsSquare();
+                break;
+            case "KeyK":
+                console.log(`player at ${player.x}, ${player.y}`)
+                break;
         }
     });
 }
 
-function setupAmbiguousobjects() {
+function setupObstacles() {
     // create a sample block to test collision
-    let box = new GameObject(playerPos[0], GROUND_HEIGHT - BALL_RADIUS * 5, BALL_RADIUS * 5, BALL_RADIUS * 5, "purple", "box");
+    let box = new GameObject(playerPos[0] - 10, GROUND_HEIGHT - UNIT_WIDTH * 5, UNIT_WIDTH * 5 + 10, UNIT_WIDTH * 5, "purple", "box", true);
     world.add(box);
 }
 
 function setupGround() {
-    ground = new GameObject(0, GROUND_HEIGHT, WIDTH, HEIGHT - GROUND_HEIGHT, "green", "ground");
+    ground = new GameObject(0, GROUND_HEIGHT, WIDTH, HEIGHT - GROUND_HEIGHT, "green", "ground", true);
     world.add(ground);
 }
 
+function setupWalls(debug=false) {
+    let wallWidth = 5 * UNIT_WIDTH;
+    let wallHeight = GROUND_HEIGHT;
+    // rgba(255, 255, 255, 0) <- entirely transparent
+
+    let color = 'rgba(255, 255, 255, 0)';
+
+    if (debug) color = "white"
+
+    let wall1 = new GameObject(0, 0, wallWidth, wallHeight, color, "wall1", true);
+    let wall2 = new GameObject(WIDTH - wallWidth, 0, wallWidth, wallHeight, color, "wall2", true);
+
+    let ceil = new GameObject(wallWidth, 0, WIDTH - 2 * wallWidth, wallWidth, color, "ceiling", true);
+    
+    world.add(wall1);
+    world.add(wall2);
+    world.add(ceil);
+}
+
 function setupPlayer() {
-    player = new GameObject(playerPos[0], playerPos[1], BALL_RADIUS, BALL_RADIUS, "red", "player");
+    player = new GameObject(playerPos[0], playerPos[1], UNIT_WIDTH, UNIT_WIDTH, "red", "player");
     world.add(player);
+}
+
+function random(min, max) {
+    return Math.random() * (max - min + 1) + min;
+}
+
+function spawnNewPhysicsSquare() {
+    let square = new GameObject(random(UNIT_WIDTH * 5 + 5, WIDTH - UNIT_WIDTH * 5 - 5), random(playerPos[1], playerPos[1] + 40), UNIT_WIDTH, UNIT_WIDTH, "blue");
+    square.velocity = new Vector(random(-10, 10), random(-10, 10))
+    world.add(square);
 }
 
 function clearScreen() {
@@ -153,13 +210,7 @@ function collisionDetect(obj, debug=false) {
     }
 
     if(debug) {
-        // if (collisions.length === 0) {
-        //     console.log('player collided with nothing');
-        // }
-        // else {
-        //     console.log(`player collided with ${collisions.length} objects`)
-        // }
-        console.log(`player collided with ${collisions.length} objects`)
+        console.log(`player collided with ${collisions.length} objects`);
     }
 
     return collisions;
@@ -170,29 +221,29 @@ function collisionDetectDirection(obj1, obj2) {
 
     obj1_bottom = obj1.y + obj1.length;
     obj2_bottom = obj2.y + obj2.length;
-    obj1_right = player.x + player.width;
+    obj1_right = obj1.x + obj1.width;
     obj2_right = obj2.x + obj2.width;
 
-    b_collision = obj2_bottom - player.y;
+    b_collision = obj2_bottom - obj1.y;
     t_collision = obj1_bottom - obj2.y;
     l_collision = obj1_right - obj2.x;
-    r_collision = obj2_right - player.x;
+    r_collision = obj2_right - obj1.x;
 
     collisions = [];
 
-    if (t_collision < b_collision && t_collision < l_collision && t_collision < r_collision ) {
+    if (t_collision <= b_collision && t_collision <= l_collision && t_collision <= r_collision ) {
         //Top collision
         collisions.push("top");
     }
-    if (b_collision < t_collision && b_collision < l_collision && b_collision < r_collision) {
+    if (b_collision <= t_collision && b_collision <= l_collision && b_collision <= r_collision) {
         //bottom collision
         collisions.push("bottom");
     }
-    if (l_collision < r_collision && l_collision < t_collision && l_collision < b_collision) {
+    if (l_collision <= r_collision && l_collision <= t_collision && l_collision <= b_collision) {
         //Left collision
         collisions.push("left");
     }
-    if (r_collision < l_collision && r_collision < t_collision && r_collision < b_collision ) {
+    if (r_collision <= l_collision && r_collision <= t_collision && r_collision <= b_collision ) {
         //Right collision
         collisions.push("right");
     }
@@ -204,7 +255,7 @@ function drawPlayer() {
     let y = player.y;
 
     ctx.fillStyle = player.color;
-    ctx.fillRect(x, y, BALL_RADIUS, BALL_RADIUS);
+    ctx.fillRect(x, y, UNIT_WIDTH, UNIT_WIDTH);
 }
 
 function drawGround() {
@@ -226,6 +277,8 @@ function loop() {
     drawPlayer();
     applyFriction();
     drawAllObjects();
+    carryOutDesires(); // this part is the one where all the code for player wanting to get left and right go
+    applyPhysicsAllObjects(false);
 
     velocity.y *= drag;
     velocity.x *= drag;
@@ -249,7 +302,7 @@ function loop() {
                     velocity.y *= -1;
                 }
                 
-                // when velocty.y gets between [-1, 1], set it to 0 just because why not
+                // when velocity.y gets between [-1, 1], set it to 0 just because why not
                 if (Math.abs(velocity.y) <= 1) {
                     velocity.y = 0;
                     canJump = true;
@@ -261,8 +314,34 @@ function loop() {
                 }
             }
             
-            if (d == "left" || d == "right") {
+            if (d === "left" || d === "right") {
                 velocity.x *= -1;
+                // for some reason, object might get stuck, so add a bit of velocity.x to push it out
+                let playerColliderCheck = new GameObject(player.x + velocity.x, player.y, player.width, player.length, color=null);
+                for (const obj of collisionDetect(playerColliderCheck)) {
+                    for (const _d of collisionDetectDirection(player, obj)) {
+                        if (_d === d) {
+                            // get the amount of overlap between the two objects
+                            let overlap;
+                            if (d === 'top') {
+                                overlap = obj.y - player.y;
+                                player.y += overlap;
+                            }
+                            else if (d === 'bottom') {
+                                overlap = player.y - obj.y;
+                                player.y -= overlap;
+                            }
+                            else if (d === 'left') {
+                                overlap = player.x - obj.x;
+                                player.x -= overlap;
+                            }
+                            else if (d === 'right') {
+                                overlap = obj.x - player.x;
+                                player.x += overlap;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -278,32 +357,61 @@ function loop() {
         velocity.y = velocity.y - gravity * (currTime - pastTime);
     }
     
-    player.y += velocity.y;
+    player.y -= velocity.y;
     player.x += velocity.x;
-
-    carryOutDesires(); // this part is the one where all the code for player wanting to get left and right go
 
     updateTimePerFrame();
 
     setTimeout(loop, 1000 / FPS);
 }
 
-function applyFriction() {
-    if (isGrounded()) {
+function applyFriction(obj=player) {
+    if (isGrounded(obj)) {
         velocity.x *= friction;
     }
 }
 
-function applyPhysicsAllObjects() {
+function applyPhysicsAllObjects(useWind=false) {
     // apply physics to all objects in the world space
     for (const obj of world.objects) {
-        
+        obj.velocity.y *= drag;
+        obj.velocity.x *= drag;
+        if(!obj.stationary && obj.name !== "player") {
+            let collidedObjects = collisionDetect(obj);
+            for (const c of collidedObjects) {
+                let directions = collisionDetectDirection(obj, c);
+                for (const d of directions) {
+                    if(d === 'top' || d === 'bottom') {
+                        obj.velocity.y *= -1;
+                    }
+                    else {
+                        obj.velocity.x *= -1;
+                    }
+                }
+            }
+
+            if (collidedObjects.length === 0) {
+                obj.velocity.y -= gravity * (currTime - pastTime);
+            }
+
+            applyFriction(obj);
+
+            if(useWind) obj.velocity.x += wind;
+        }
+        obj.y -= obj.velocity.y;
+        obj.x += obj.velocity.x;
+    }
+    if (useWind) {
+        wind += random(-windIncrement, windIncrement);
+        if (wind >= windCap) wind = 1;
+        if (wind <= -windCap) wind = -1;
+        console.log('wind is curerntly at: ' + wind);
     }
 }
 
 function carryOutDesires() {
     if (wantJump) {
-        velocity.y -= jumpForce;
+        velocity.y += jumpForce;
         wantJump = false;
         isJumping = true;
     }
@@ -319,7 +427,7 @@ function carryOutDesires() {
     }
 }
 
-function isGrounded() {
+function isGrounded(obj=player) {
     let collidedObjects = collisionDetect(player);
     for (const obj of collidedObjects) {
         let directions = collisionDetectDirection(player, obj);
