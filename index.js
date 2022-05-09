@@ -81,8 +81,8 @@ function setupListener() {
         switch (e.code) {
             case "ArrowUp":
             case "KeyW":
-                if (isGrounded() && Math.abs(velocity.y) < 1) {
-                    canJump = true;
+                if (isGrounded() && canJump) {
+                    velocity.y -= jumpForce;
                 }
                 break;
             
@@ -215,6 +215,9 @@ function loop() {
             if (d == "top" || d == "bottom") {
                 // else velocity.y *= -1;
                 velocity.y *= -1;
+                if (Math.abs(velocity.y) < 1) {
+                    canJump = true;
+                }
             }
             
             if (d == "left" || d == "right") {
@@ -230,10 +233,10 @@ function loop() {
         velocity.y = velocity.y - gravity * (currTime - pastTime);
     }
 
-    if (canJump) {
-        velocity.y -= jumpForce;
-        canJump = false;
-    }
+    // if (canJump) {
+    //     velocity.y -= jumpForce;
+    //     canJump = false;
+    // }
     
     player.y += velocity.y;
     player.x += velocity.x;
