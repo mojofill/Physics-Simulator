@@ -142,6 +142,12 @@ function setupListener() {
             case "KeyK":
                 console.log(`player at ${player.x}, ${player.y}`)
                 break;
+            case "KeyP":
+                spawnNewPhysicsSquare();
+                break;
+            case "KeyK":
+                console.log(`player at ${player.x}, ${player.y}`)
+                break;
             case "KeyR":
                 for (i = 0; i < world.objects.length; i++) {
                     let obj = world.objects[i];
