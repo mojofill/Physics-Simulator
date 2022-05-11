@@ -32,7 +32,7 @@ class Vector {
 let velocity = new Vector();
 
 let gravity = 9.28;
-let acceleration = 300;
+let acceleration = 100;
 let jumpForce = 10;
 let friction = 0.999;
 let drag = 0.99;
@@ -75,6 +75,10 @@ class GameObject {
         this.name = name;
         this.stationary = stationary;
         this.velocity = new Vector(0, 0);
+    }
+
+    clear() {
+        ctx.clearRect(this.x, this.y, this.width, this.length);
     }
 
     draw() {
@@ -125,6 +129,12 @@ function setupListener() {
             case "ArrowLeft":
             case "KeyA":
                 wantGoLeft = true;
+                break;
+            case "KeyP":
+                spawnNewPhysicsSquare();
+                break;
+            case "KeyK":
+                console.log(`player at ${player.x}, ${player.y}`)
                 break;
             case "KeyP":
                 spawnNewPhysicsSquare();
@@ -189,13 +199,13 @@ function setupGround() {
 }
 
 function setupWalls(debug=false) {
-    let wallWidth = 3 * UNIT_WIDTH;
+    let wallWidth = 5 * UNIT_WIDTH;
     let wallHeight = GROUND_HEIGHT;
     // rgba(255, 255, 255, 0) <- entirely transparent
 
     let color = 'rgba(255, 255, 255, 0)';
 
-    if (debug) color = "orange"
+    if (debug) color = "white"
 
     let wall1 = new GameObject(0, 0, wallWidth, wallHeight, color, "wall1", true);
     let wall2 = new GameObject(WIDTH - wallWidth, 0, wallWidth, wallHeight, color, "wall2", true);
@@ -217,7 +227,7 @@ function random(min, max) {
 }
 
 function spawnNewPhysicsSquare() {
-    let square = new GameObject(random(UNIT_WIDTH * 5 + 5, WIDTH - UNIT_WIDTH * 5 - 5), random(playerPos[1], playerPos[1] + 40), UNIT_WIDTH, UNIT_WIDTH, "blue", "square");
+    let square = new GameObject(random(UNIT_WIDTH * 5 + 5, WIDTH - UNIT_WIDTH * 5 - 5), random(playerPos[1], playerPos[1] + 40), UNIT_WIDTH, UNIT_WIDTH, "blue");
     square.velocity = new Vector(random(-10, 10), random(-10, 10))
     world.add(square);
 }
